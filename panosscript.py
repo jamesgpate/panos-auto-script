@@ -1,4 +1,4 @@
-"""Import for command line and csv lib"""
+"""Automating the palo alto vlans"""
 import sys
 import csv
 
@@ -31,6 +31,7 @@ def init():
     Returns:
         firewall: The PA Firewall object
     """
+    # Import from the login_details file and log in
     firewall = Firewall(HOSTNAME, api_username=USERNAME, api_password=PASSWORD)
     return firewall
 
@@ -41,7 +42,7 @@ def load_vlans():
         vlans: the vlan ids
         subnet_sizes: the subnet sizes for the related vlans
     """
-
+    # blank lists to hold them, import from csv in future
     vlans = []
     subnet_sizes = []
 
@@ -58,36 +59,43 @@ def load_vlans():
         subnet_sizes.append(30)
     return (vlans, subnet_sizes)
 
-def create_rule(firewall: Firewall):
+def create_rule(ip_address: str, vlan: int):
     """Create the firewall rule
 
     Args:
-        firewall (object): the firewall object
+        ip_address (str): ip range of the network
+        vlan (int): the vlan number
     """
-    total_rules_obj = firewall.add(Rulebase())
-
     new_rule = SecurityRule(
-        name='',
-        fromzone=['any'],
-        tozone=['any'],
-        source=['any'],
-        destination=['any'],
+        name=f'VLAN {vlan} block to other vlans',
+        fromzone=['guest'],
+        tozone=['guest'],
+        source=[ip_address],
+        destination=[ip_address],
+        negate_destination=True,
         application=['any'],
         service=['application-default'],
-        action='allow',
-        log_end=True
+        action='deny',
+        log_end=None
     )
-    total_rules_obj.add(new_rule)
-    new_rule.create()
+    return new_rule
 
-def create_vlans_and_commit(vlans: list, subnet_sizes: list, firewall: Firewall):
-    """make all of the objects and commit them to the firewall
+def create_vlans(vlans: list, subnet_sizes: list, firewall: Firewall):
+    """make all of the objects and add them to the firewall
 
     Args:
-        vlans (list): _description_
-        subnet_sizes (list): _description_
+        vlans (list): list of vlans
+        subnet_sizes (list): subnet sizes for the vlans
     """
+    # Loading the rulebase from the firewall
+    rulebase = Rulebase()
+    firewall.add(rulebase)
+    print("Getting the current rules...")
+    SecurityRule.refreshall(rulebase)
+
+    # run through the list of vlans
     for i, vlan in enumerate(vlans):
+        print(f'Adding VLAN {vlan}')
         gateway = AddressObject(
             name=f'VLAN {vlan} Gateway',
             value=f'10.{vlan//100}.{vlan%100}.1/32',
@@ -95,6 +103,7 @@ def create_vlans_and_commit(vlans: list, subnet_sizes: list, firewall: Firewall)
             description=f'The gateway IP address on the Palo for VLAN {vlan} traffic'
         )
         firewall.add(gateway)
+
         network_range = AddressObject(
             name=f'VLAN {vlan} Network Range',
             value=f'10.{vlan//100}.{vlan%100}.0/{subnet_sizes[i]}',
@@ -102,6 +111,7 @@ def create_vlans_and_commit(vlans: list, subnet_sizes: list, firewall: Firewall)
             description=f'The network range on the Palo for VLAN {vlan}'
         )
         firewall.add(network_range)
+
         dhcp = AddressObject(
             name=f'VLAN {vlan} DHCP Server',
             value=f'10.{vlan//100}.{vlan%100}.2/32',
@@ -109,6 +119,7 @@ def create_vlans_and_commit(vlans: list, subnet_sizes: list, firewall: Firewall)
             description=f'The DHCP Server for VLAN {vlan}'
         )
         firewall.add(dhcp)
+
         subint = Layer3Subinterface(
             name=f'ethernet1/3.{vlan}',
             tag=vlan,
@@ -116,17 +127,32 @@ def create_vlans_and_commit(vlans: list, subnet_sizes: list, firewall: Firewall)
             comment=f'Subinterface for VLAN {vlan}'
         )
         firewall.add(subint)
-        gateway.create()
-        network_range.create()
-        dhcp.create()
-        subint.create()
+
+        rule = create_rule(network_range.name, vlan)
+        rulebase.add(rule)
+
+    print("Creating all on the firewall... Please wait...")
+    firewall.find(f'VLAN {vlans[0]} Gateway', AddressObject).create_similar()
+    firewall.find(f'ethernet1/3.{vlans[0]}', Layer3Subinterface).create_similar()
+    firewall.find(f'VLAN {vlans[0]} block to other vlans', SecurityRule).create_similar()
 
 def main():
     """Main function
     """
+
+    print("Initializing the firewall connection...")
     firewall = init()
+
+    print("Loading the vlans...")
     vlans, subnet_sizes = load_vlans()
-    create_vlans_and_commit(vlans, subnet_sizes, firewall)
+
+    print("Creating the vlans...")
+    create_vlans(vlans, subnet_sizes, firewall)
+
+    print("Committing to the firewall...")
+    firewall.commit(sync=True)
+
+    print("Done!")
 
 if __name__ == "__main__":
     if len(sys.argv) != 1:
