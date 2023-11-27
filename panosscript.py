@@ -32,7 +32,7 @@ def init():
         firewall: The PA Firewall object
     """
     # Import from the login_details file and log in
-    firewall = Firewall(HOSTNAME, api_username=USERNAME, api_password=PASSWORD)
+    firewall = Firewall(HOSTNAME, api_username=USERNAME, api_password=PASSWORD) #Need to be entered as strings
     return firewall
 
 def load_vlans():
@@ -107,7 +107,7 @@ def create_vlans(vlans: list, subnet_sizes: list, firewall: Firewall):
         network_range = AddressObject(
             name=f'VLAN {vlan} Network Range',
             value=f'10.{vlan//100}.{vlan%100}.0/{subnet_sizes[i]}',
-            type="ip-range",
+            type="ip-netmask",
             description=f'The network range on the Palo for VLAN {vlan}'
         )
         firewall.add(network_range)
