@@ -32,7 +32,8 @@ def init():
         firewall: The PA Firewall object
     """
     # Import from the login_details file and log in
-    firewall = Firewall(HOSTNAME, api_username=USERNAME, api_password=PASSWORD) #Need to be entered as strings
+    # Need to be entered as strings
+    firewall = Firewall(HOSTNAME, api_username=USERNAME, api_password=PASSWORD)
     return firewall
 
 def load_vlans():
@@ -56,7 +57,7 @@ def load_vlans():
 
     for i in range(1100,1200):
         vlans.append(i)
-        subnet_sizes.append(30)
+        subnet_sizes.append(29)
     return (vlans, subnet_sizes)
 
 def create_rule(ip_address: str, vlan: int):
@@ -126,11 +127,13 @@ def create_vlans(vlans: list, subnet_sizes: list, firewall: Firewall):
             ip=f'10.{vlan//100}.{vlan%100}.1/32',
             comment=f'Subinterface for VLAN {vlan}'
         )
+        subint.set_virtual_router('default', update=True)
+        subint.set_zone('guest', update=True)
         firewall.add(subint)
 
         rule = create_rule(network_range.name, vlan)
         rulebase.add(rule)
-        if (i == len(vlans) - 1):
+        if i == len(vlans) - 1:
             save_rule = rule
 
     print("Creating all on the firewall... Please wait...")
