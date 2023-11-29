@@ -92,7 +92,7 @@ def create_vlans(vlans: list, subnet_sizes: list, firewall: Firewall):
     firewall.add(rulebase)
     print("Getting the current rules...")
     SecurityRule.refreshall(rulebase)
-
+    save_rule = None
     # run through the list of vlans
     for i, vlan in enumerate(vlans):
         print(f'Adding VLAN {vlan}')
@@ -130,11 +130,13 @@ def create_vlans(vlans: list, subnet_sizes: list, firewall: Firewall):
 
         rule = create_rule(network_range.name, vlan)
         rulebase.add(rule)
+        if (i == len(vlans) - 1):
+            save_rule = rule
 
     print("Creating all on the firewall... Please wait...")
     firewall.find(f'VLAN {vlans[0]} Gateway', AddressObject).create_similar()
     firewall.find(f'ethernet1/3.{vlans[0]}', Layer3Subinterface).create_similar()
-    firewall.find(f'VLAN {vlans[0]} block to other vlans', SecurityRule).create_similar()
+    save_rule.create_similar()
 
 def main():
     """Main function
