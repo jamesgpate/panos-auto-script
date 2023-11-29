@@ -124,22 +124,27 @@ def create_vlans(vlans: list, subnet_sizes: list, firewall: Firewall):
         subint = Layer3Subinterface(
             name=f'ethernet1/3.{vlan}',
             tag=vlan,
-            ip=f'10.{vlan//100}.{vlan%100}.1/32',
+            ip=f'10.{vlan//100}.{vlan%100}.1/{subnet_sizes[i]}',
             comment=f'Subinterface for VLAN {vlan}'
         )
-        subint.set_virtual_router('default', update=True)
-        subint.set_zone('guest', update=True)
+        
         firewall.add(subint)
 
         rule = create_rule(network_range.name, vlan)
         rulebase.add(rule)
         if i == len(vlans) - 1:
             save_rule = rule
+        #Run script first with these lines commented out
+        #Run second time with these lines
+        #subint.set_virtual_router('default', update=True)
+        #subint.set_zone('guest', update=True)        
 
     print("Creating all on the firewall... Please wait...")
+    
     firewall.find(f'VLAN {vlans[0]} Gateway', AddressObject).create_similar()
     firewall.find(f'ethernet1/3.{vlans[0]}', Layer3Subinterface).create_similar()
     save_rule.create_similar()
+    
 
 def main():
     """Main function
@@ -154,8 +159,8 @@ def main():
     print("Creating the vlans...")
     create_vlans(vlans, subnet_sizes, firewall)
 
-    print("Committing to the firewall...")
-    firewall.commit(sync=True)
+    #print("Committing to the firewall...")
+    #firewall.commit(sync=True)
 
     print("Done!")
 
